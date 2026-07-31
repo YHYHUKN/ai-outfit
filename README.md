@@ -1,5 +1,9 @@
 # AI 穿搭预演工具 Demo
 
+> **在线演示**：https://yhyhukn.github.io/ai-outfit/ —— GitHub Pages 托管，打开即用，默认使用免费的 Pollinations 接口生成搭配图。
+>
+> 说明：GitHub Pages 为纯静态托管，在线版默认可用 **Pollinations 免费接口** 与 **本地模拟** 模式；**DeepSeek 润色提示词 / OpenAI / 自定义后端** 等依赖服务端代理（`server.js`）的功能需在本地运行后使用（见下文「一键启动」「命令行启动」）。
+
 一个简易的 AI 穿搭搭配工具，包含：
 
 - **单品库区**：添加、编辑、搜索、筛选服装单品。
