@@ -1,4 +1,4 @@
-# AI 穿搭预演工具 Demo
+# AI 穿搭预演工具
 
 > **在线演示**：https://yhyhukn.github.io/ai-outfit/ —— GitHub Pages 托管，打开即用，默认使用免费的 Pollinations 接口生成搭配图。
 >
