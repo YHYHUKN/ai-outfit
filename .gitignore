@@ -1,0 +1,8 @@
+# WorkBuddy 项目内部数据（记忆、配置），不纳入版本库
+.workbuddy/
+
+# 系统/临时文件
+*.log
+.DS_Store
+Thumbs.db
+~$*

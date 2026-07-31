@@ -1,0 +1,941 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI 穿搭预演工具</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root { --primary: #0d9488; --primary-dark: #0f766e; }
+    body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+    .scrollbar-hide::-webkit-scrollbar { display: none; }
+    .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+    .slot { min-height: 180px; transition: all .15s ease; }
+    .slot.drag-over { border-color: #0d9488; background: #f0fdfa; }
+    .item-card img { object-fit: cover; width: 100%; height: 120px; }
+    .tag { display:inline-block; padding: 0.125rem 0.5rem; font-size: 0.75rem; border-radius: 9999px; background: #f3f4f6; color: #4b5563; }
+    .loader { border: 3px solid #e5e7eb; border-top-color: #0d9488; border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; display:inline-block; vertical-align:middle; }
+    .img-placeholder { display: flex; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body class="bg-gray-50 text-gray-800 h-screen flex flex-col overflow-hidden">
+  <header class="bg-white border-b px-5 py-3 flex items-center justify-between shrink-0 z-10">
+    <div>
+      <h1 class="text-xl font-bold text-gray-900 tracking-tight">AI 穿搭预演工具</h1>
+      <p class="text-xs text-gray-500">Outfit Preview</p>
+    </div>
+    <div class="flex items-center gap-2">
+      <input type="file" id="importFile" class="hidden" accept="application/json">
+      <button id="btnSample" class="px-3 py-1.5 text-sm border rounded-md hover:bg-gray-50 transition">加载示例商品</button>
+      <button id="btnImport" class="px-3 py-1.5 text-sm border rounded-md hover:bg-gray-50 transition">导入备份</button>
+      <button id="btnExport" class="px-3 py-1.5 text-sm border rounded-md hover:bg-gray-50 transition">导出备份</button>
+      <button id="btnSettings" class="px-3 py-1.5 text-sm border rounded-md hover:bg-gray-50 transition">AI 设置</button>
+      <button id="btnAdd" class="px-3 py-1.5 text-sm bg-teal-700 text-white rounded-md hover:bg-teal-800 transition">添加衣服</button>
+    </div>
+  </header>
+
+  <main class="flex-1 grid grid-cols-[300px_1fr_360px] min-h-0">
+    <!-- 单品库 -->
+    <aside class="bg-white border-r flex flex-col min-h-0">
+      <div class="p-4 border-b">
+        <div class="flex items-center justify-between mb-1">
+          <h2 class="font-bold text-gray-900">衣橱</h2>
+          <span id="wardrobeCount" class="text-xs text-gray-500">0 件单品</span>
+        </div>
+        <input id="searchInput" type="text" placeholder="搜索名称、颜色、备注" class="w-full mt-2 px-3 py-2 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-600">
+      </div>
+      <div class="px-4 py-3 border-b space-y-3">
+        <div class="flex flex-wrap gap-1" id="categoryFilter">
+          <button data-cat="all" class="px-2.5 py-1 text-xs rounded-full bg-teal-700 text-white">全部</button>
+          <button data-cat="top" class="px-2.5 py-1 text-xs rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200">上衣</button>
+          <button data-cat="bottom" class="px-2.5 py-1 text-xs rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200">下装</button>
+          <button data-cat="dress" class="px-2.5 py-1 text-xs rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200">连衣裙</button>
+          <button data-cat="outer" class="px-2.5 py-1 text-xs rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200">外套</button>
+          <button data-cat="shoes" class="px-2.5 py-1 text-xs rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200">鞋</button>
+          <button data-cat="accessories" class="px-2.5 py-1 text-xs rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200">配饰</button>
+          <button data-cat="bag" class="px-2.5 py-1 text-xs rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200">包</button>
+        </div>
+        <div class="flex gap-2">
+          <select id="seasonFilter" class="flex-1 text-xs border rounded-md px-2 py-1.5">
+            <option value="all">季节：全部</option>
+            <option value="spring">春</option>
+            <option value="summer">夏</option>
+            <option value="autumn">秋</option>
+            <option value="winter">冬</option>
+          </select>
+          <select id="occasionFilter" class="flex-1 text-xs border rounded-md px-2 py-1.5">
+            <option value="all">场合：全部</option>
+            <option value="casual">休闲</option>
+            <option value="commute">通勤</option>
+            <option value="sport">运动</option>
+            <option value="formal">正式</option>
+            <option value="party">派对</option>
+          </select>
+        </div>
+      </div>
+      <div id="wardrobeList" class="flex-1 overflow-y-auto p-4 space-y-3">
+        <div class="text-center text-sm text-gray-400 mt-10">暂无单品，点击右上角添加</div>
+      </div>
+    </aside>
+
+    <!-- 搭配区 -->
+    <section class="bg-gray-50 flex flex-col min-h-0 p-5 overflow-y-auto">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="font-bold text-gray-900">搭配区</h2>
+        <div class="flex gap-2">
+          <button id="btnClear" class="px-3 py-1.5 text-sm border rounded-md hover:bg-white transition">清空</button>
+          <button id="btnSaveOutfit" class="px-3 py-1.5 text-sm border rounded-md hover:bg-white transition">保存套装</button>
+          <button id="btnGenerate" class="px-4 py-1.5 text-sm bg-teal-700 text-white rounded-md hover:bg-teal-800 transition">AI 生成搭配图</button>
+        </div>
+      </div>
+      <div id="dropBoard" class="flex-1 grid grid-cols-3 gap-4 content-start">
+        <!-- slots generated by JS -->
+      </div>
+      <div id="promptPanel" class="mt-4 hidden bg-white border rounded-md p-3 text-sm text-gray-600">
+        <div class="flex items-center justify-between mb-1">
+          <span class="font-semibold text-gray-800">AI 提示词（可编辑）</span>
+          <button type="button" id="btnResetPrompt" class="text-xs text-teal-700 hover:underline">恢复默认</button>
+        </div>
+        <textarea id="promptText" class="w-full text-sm border rounded-md px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-teal-500" rows="4"></textarea>
+        <p class="text-xs text-gray-400 mt-1">修改后点击「AI 生成搭配图」会使用当前提示词。描述越具体，生成效果越贴近真实单品。</p>
+      </div>
+    </section>
+
+    <!-- 成果展示区 -->
+    <aside class="bg-white border-l flex flex-col min-h-0">
+      <div class="p-4 border-b">
+        <h2 class="font-bold text-gray-900">成果展示</h2>
+      </div>
+      <div class="flex-1 overflow-y-auto p-4">
+        <div id="resultEmpty" class="text-center text-gray-400 text-sm mt-10">
+          <div class="mb-2">尚未生成搭配图</div>
+          <div>拖拽单品到搭配区后点击「AI 生成搭配图」</div>
+        </div>
+        <div id="resultContent" class="hidden">
+          <div class="relative bg-gray-100 rounded-lg overflow-hidden mb-3 min-h-[200px] flex items-center justify-center" style="aspect-ratio: 3 / 4;">
+            <div id="resultLoader" class="loader hidden"></div>
+            <img id="resultImage" class="w-full h-full object-contain relative z-10 hidden" alt="搭配成果">
+            <div id="resultError" class="hidden flex flex-col items-center text-gray-500 text-sm p-4 text-center"><span class="text-2xl mb-1">🖼️</span><span>图片加载失败</span><span class="text-xs text-gray-400 mt-1">网络或生成服务暂时不可用，可稍后再试</span></div>
+          </div>
+          <div class="flex gap-2 mb-4">
+            <button id="btnSaveGenerated" class="flex-1 px-3 py-1.5 text-sm bg-teal-700 text-white rounded-md hover:bg-teal-800">保存为套装</button>
+            <button id="btnDownload" class="flex-1 px-3 py-1.5 text-sm border rounded-md hover:bg-gray-50">下载图片</button>
+          </div>
+          <div id="resultGeneratedAt" class="text-xs text-gray-400 text-center"></div>
+        </div>
+
+        <h3 class="font-bold text-gray-900 mt-6 mb-3">已保存套装</h3>
+        <div id="savedOutfits" class="space-y-3">
+          <div class="text-sm text-gray-400">暂无套装</div>
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <!-- 添加/编辑单品弹窗 -->
+  <div id="itemModal" class="fixed inset-0 bg-black/40 hidden items-center justify-center z-50">
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-md p-5">
+      <h3 id="itemModalTitle" class="text-lg font-bold mb-4">添加衣服</h3>
+      <form id="itemForm" class="space-y-3">
+        <input type="hidden" id="itemId">
+        <div>
+          <label class="block text-sm text-gray-600 mb-1">图片</label>
+          <div class="flex gap-2">
+            <input type="file" id="itemImageFile" accept="image/*" class="flex-1 text-sm border rounded-md px-2 py-1.5">
+          </div>
+          <div class="mt-2 flex gap-2">
+            <span class="text-sm text-gray-500">或图片 URL</span>
+            <input type="text" id="itemImageUrl" placeholder="https://..." class="flex-1 text-sm border rounded-md px-2 py-1.5">
+          </div>
+          <div id="itemPreview" class="mt-2 hidden h-32 bg-gray-100 rounded-md flex items-center justify-center overflow-hidden">
+            <img class="h-full object-contain">
+          </div>
+        </div>
+        <div>
+          <label class="block text-sm text-gray-600 mb-1">名称</label>
+          <input type="text" id="itemName" required class="w-full text-sm border rounded-md px-3 py-2">
+        </div>
+        <div>
+          <label class="block text-sm text-gray-600 mb-1">英文描述（用于 AI 生成，越具体效果越准）</label>
+          <textarea id="itemDescription" rows="2" placeholder="例如：colorful floral print slip dress with thin straps, knee length" class="w-full text-sm border rounded-md px-3 py-2"></textarea>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-sm text-gray-600 mb-1">分类</label>
+            <select id="itemCategory" class="w-full text-sm border rounded-md px-2 py-2">
+              <option value="top">上衣</option>
+              <option value="bottom">下装</option>
+              <option value="dress">连衣裙</option>
+              <option value="outer">外套</option>
+              <option value="shoes">鞋</option>
+              <option value="accessories">配饰</option>
+              <option value="bag">包</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm text-gray-600 mb-1">颜色</label>
+            <input type="text" id="itemColor" placeholder="例如：卡其色" class="w-full text-sm border rounded-md px-3 py-2">
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-sm text-gray-600 mb-1">季节</label>
+            <select id="itemSeason" class="w-full text-sm border rounded-md px-2 py-2">
+              <option value="spring">春</option>
+              <option value="summer">夏</option>
+              <option value="autumn">秋</option>
+              <option value="winter">冬</option>
+              <option value="all">四季</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm text-gray-600 mb-1">场合</label>
+            <select id="itemOccasion" class="w-full text-sm border rounded-md px-2 py-2">
+              <option value="casual">休闲</option>
+              <option value="commute">通勤</option>
+              <option value="sport">运动</option>
+              <option value="formal">正式</option>
+              <option value="party">派对</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label class="block text-sm text-gray-600 mb-1">备注</label>
+          <input type="text" id="itemNote" class="w-full text-sm border rounded-md px-3 py-2">
+        </div>
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" id="btnCancelItem" class="px-4 py-2 text-sm border rounded-md hover:bg-gray-50">取消</button>
+          <button type="submit" class="px-4 py-2 text-sm bg-teal-700 text-white rounded-md hover:bg-teal-800">保存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- AI 设置弹窗 -->
+  <div id="settingsModal" class="fixed inset-0 bg-black/40 hidden items-center justify-center z-50">
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-md p-5">
+      <h3 class="text-lg font-bold mb-4">AI 图像生成设置</h3>
+      <form id="settingsForm" class="space-y-3">
+        <div>
+          <label class="block text-sm text-gray-600 mb-1">生成方式</label>
+          <select id="settingProvider" class="w-full text-sm border rounded-md px-3 py-2">
+            <option value="pollinations">Pollinations AI（免费，无需 Key，推荐）</option>
+            <option value="deepseek">DeepSeek 润色提示词 + 免费出图（需 Key）</option>
+            <option value="mock">本地模拟（前端 Canvas 合成）</option>
+            <option value="openai">OpenAI DALL·E（需 API Key）</option>
+            <option value="backend">自定义后端接口</option>
+          </select>
+          <p class="text-xs text-gray-400 mt-1">Pollinations 为免费公共接口，直接通过 URL 出图，无需任何配置。</p>
+        </div>
+        <div id="openaiFields" class="hidden space-y-3">
+          <div>
+            <label class="block text-sm text-gray-600 mb-1">API Key</label>
+            <input type="password" id="settingApiKey" placeholder="sk-..." class="w-full text-sm border rounded-md px-3 py-2">
+            <p class="text-xs text-gray-400 mt-1">仅保存在浏览器本地，服务端通过代理调用。</p>
+          </div>
+          <div>
+            <label class="block text-sm text-gray-600 mb-1">模型</label>
+            <select id="settingModel" class="w-full text-sm border rounded-md px-3 py-2">
+              <option value="dall-e-3">dall-e-3</option>
+              <option value="dall-e-2">dall-e-2</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm text-gray-600 mb-1">API Base URL（可选，兼容第三方）</label>
+            <input type="text" id="settingApiBase" placeholder="https://api.openai.com/v1/images/generations" class="w-full text-sm border rounded-md px-3 py-2">
+            <p class="text-xs text-gray-400 mt-1">留空使用 OpenAI 官方地址；兼容服务填其 images 接口地址。</p>
+          </div>
+        </div>
+        <div id="backendFields" class="hidden space-y-3">
+          <div>
+            <label class="block text-sm text-gray-600 mb-1">后端接口 URL</label>
+            <input type="text" id="settingBackendUrl" placeholder="http://localhost:3000/api/generate" class="w-full text-sm border rounded-md px-3 py-2">
+            <p class="text-xs text-gray-400 mt-1">你的生成服务地址，需接受 POST { prompt, apiKey, items }。</p>
+          </div>
+          <div>
+            <label class="block text-sm text-gray-600 mb-1">API Key（可选）</label>
+            <input type="password" id="settingApiKeyBackend" placeholder="sk-... 或你的服务密钥" class="w-full text-sm border rounded-md px-3 py-2">
+            <p class="text-xs text-gray-400 mt-1">仅保存在浏览器本地，请求时通过 Authorization 头或 body 发送给后端。</p>
+          </div>
+        </div>
+        <div id="deepseekFields" class="hidden space-y-3">
+          <div>
+            <label class="block text-sm text-gray-600 mb-1">DeepSeek API Key</label>
+            <input type="password" id="settingDeepseekKey" placeholder="sk-..." class="w-full text-sm border rounded-md px-3 py-2">
+            <p class="text-xs text-gray-400 mt-1">仅保存在浏览器本地，服务端通过 /api/enhance 代理调用，用于把所选单品写成精准英文提示词。</p>
+          </div>
+          <div>
+            <label class="block text-sm text-gray-600 mb-1">模型</label>
+            <select id="settingDeepseekModel" class="w-full text-sm border rounded-md px-3 py-2">
+              <option value="deepseek-chat">deepseek-chat</option>
+              <option value="deepseek-reasoner">deepseek-reasoner</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm text-gray-600 mb-1">API Base URL（可选）</label>
+            <input type="text" id="settingDeepseekBase" placeholder="https://api.deepseek.com/chat/completions" class="w-full text-sm border rounded-md px-3 py-2">
+            <p class="text-xs text-gray-400 mt-1">留空使用 DeepSeek 官方地址；兼容服务填其 chat/completions 接口地址。</p>
+          </div>
+          <p class="text-xs text-gray-500 bg-gray-50 rounded-md p-2">说明：DeepSeek 只提供文本能力，不生成图片。此模式会先用 DeepSeek 把穿搭写成高质量英文提示词，再交由免费 Pollinations 接口出图，匹配度更高。</p>
+        </div>
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" id="btnCancelSettings" class="px-4 py-2 text-sm border rounded-md hover:bg-gray-50">取消</button>
+          <button type="submit" class="px-4 py-2 text-sm bg-teal-700 text-white rounded-md hover:bg-teal-800">保存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // ---- 数据 & 常量 ----
+    const CATEGORIES = {
+      top: { label: '上衣', slot: '上装', icon: '👕', en: 'top' },
+      bottom: { label: '下装', slot: '下装', icon: '👖', en: 'bottom' },
+      dress: { label: '连衣裙', slot: '连衣裙', icon: '👗', en: 'dress' },
+      outer: { label: '外套', slot: '外套', icon: '🧥', en: 'outerwear' },
+      shoes: { label: '鞋', slot: '鞋', icon: '👟', en: 'shoes' },
+      accessories: { label: '配饰', slot: '配饰', icon: '👒', en: 'accessory' },
+      bag: { label: '包', slot: '包', icon: '👜', en: 'bag' }
+    };
+    const SEASONS = { spring: '春', summer: '夏', autumn: '秋', winter: '冬', all: '四季' };
+    const OCCASIONS = { casual: '休闲', commute: '通勤', sport: '运动', formal: '正式', party: '派对' };
+
+    let wardrobe = [];
+    let currentOutfit = [];
+    let savedOutfits = [];
+    let settings = { provider: 'pollinations', apiKey: '', model: 'dall-e-3', backendUrl: 'http://localhost:3000/api/generate', backendApiKey: '', apiBase: '', deepseekKey: '', deepseekModel: 'deepseek-chat', deepseekBase: '' };
+
+    const STORAGE_KEYS = { wardrobe: 'ai_wardrobe_v1', outfits: 'ai_saved_outfits_v1', settings: 'ai_settings_v1' };
+
+    // ---- Pollinations 免费图像接口 ----
+    function pollImg(prompt, seed, w = 400, h = 500) {
+      return `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=${w}&height=${h}&nologo=true&seed=${seed}`;
+    }
+
+    // ---- 内置示例商品 ----
+    const SAMPLE_ITEMS = [
+      { name: '白色圆领棉质T恤', category: 'top', color: '白色', season: 'summer', occasion: 'casual', p: 'plain white cotton crew-neck t-shirt, product photo, centered on pure white background, e-commerce, no model', desc: 'a plain white cotton crew-neck t-shirt, short sleeves, relaxed fit', seed: 101 },
+      { name: '蓝色牛仔衬衫', category: 'top', color: '牛仔蓝', season: 'spring', occasion: 'casual', p: 'blue denim shirt, product photo, centered on pure white background, e-commerce, no model', desc: 'a blue chambray denim button-up shirt, long sleeves, casual fit', seed: 102 },
+      { name: '米色针织开衫', category: 'top', color: '米色', season: 'autumn', occasion: 'commute', p: 'beige knit cardigan sweater, product photo, centered on pure white background, e-commerce, no model', desc: 'a beige knit cardigan sweater, soft texture, open front, long sleeves', seed: 103 },
+      { name: '黑色修身西装外套', category: 'outer', color: '黑色', season: 'autumn', occasion: 'formal', p: 'black slim fit blazer jacket, product photo, centered on pure white background, e-commerce, no model', desc: 'a black slim fit blazer jacket, single button, tailored shoulders, formal', seed: 104 },
+      { name: '卡其色长风衣', category: 'outer', color: '卡其色', season: 'autumn', occasion: 'commute', p: 'khaki long trench coat, product photo, centered on pure white background, e-commerce, no model', desc: 'a khaki long trench coat, double-breasted, belted waist, below knee length', seed: 105 },
+      { name: '深蓝直筒牛仔裤', category: 'bottom', color: '深蓝', season: 'all', occasion: 'casual', p: 'dark blue straight leg jeans, product photo, centered on pure white background, e-commerce, no model', desc: 'dark blue straight leg jeans, classic five-pocket style, mid rise', seed: 106 },
+      { name: '黑色西装裤', category: 'bottom', color: '黑色', season: 'all', occasion: 'formal', p: 'black tailored suit trousers, product photo, centered on pure white background, e-commerce, no model', desc: 'black tailored suit trousers, straight leg, creased front, formal', seed: 107 },
+      { name: '格纹A字半身裙', category: 'bottom', color: '格纹', season: 'spring', occasion: 'commute', p: 'plaid check A-line skirt, product photo, centered on pure white background, e-commerce, no model', desc: 'a plaid check A-line midi skirt, knee length, side zipper', seed: 108 },
+      { name: '碎花吊带连衣裙', category: 'dress', color: '碎花', season: 'summer', occasion: 'party', p: 'floral print summer slip dress, product photo, centered on pure white background, e-commerce, no model', desc: 'a colorful floral print summer slip dress, thin spaghetti straps, knee length, flowy fabric', seed: 109 },
+      { name: '白色小皮鞋', category: 'shoes', color: '白色', season: 'all', occasion: 'casual', p: 'white leather loafers shoes pair, product photo, centered on pure white background, e-commerce, no model', desc: 'white leather loafers, low heel, penny strap detail, comfortable', seed: 110 },
+      { name: '黑色尖头高跟鞋', category: 'shoes', color: '黑色', season: 'all', occasion: 'formal', p: 'black pointed toe high heels pair, product photo, centered on pure white background, e-commerce, no model', desc: 'black pointed toe high heels, stiletto heel, sleek patent leather', seed: 111 },
+      { name: '棕色皮质单肩包', category: 'bag', color: '棕色', season: 'all', occasion: 'commute', p: 'brown leather shoulder handbag, product photo, centered on pure white background, e-commerce, no model', desc: 'a brown leather shoulder handbag, medium size, gold hardware, adjustable strap', seed: 112 },
+      { name: '米色针织贝雷帽', category: 'accessories', color: '米色', season: 'autumn', occasion: 'casual', p: 'beige knit beret hat, product photo, centered on pure white background, e-commerce, no model', desc: 'a beige knit beret hat, soft wool texture, classic French style', seed: 113 },
+      { name: '金色细链项链', category: 'accessories', color: '金色', season: 'all', occasion: 'party', p: 'delicate gold chain necklace, product photo, centered on pure white background, e-commerce, no model', desc: 'a delicate gold chain necklace, thin chain, small pendant, elegant', seed: 114 }
+    ];
+
+    function loadSampleItems(force) {
+      if (!force && wardrobe.length) { showToast('衣橱已有单品'); return; }
+      const items = SAMPLE_ITEMS.map((s) => ({
+        id: 'sample-' + s.seed,
+        name: s.name,
+        category: s.category,
+        color: s.color,
+        season: s.season,
+        occasion: s.occasion,
+        note: '示例商品',
+        description: s.desc,
+        image: pollImg(s.p, s.seed)
+      }));
+      // 去重合并
+      const existingIds = new Set(wardrobe.map(w => w.id));
+      items.forEach(it => { if (!existingIds.has(it.id)) wardrobe.unshift(it); });
+      saveWardrobe();
+      renderWardrobe();
+      showToast('已加载 ' + items.length + ' 件示例商品（AI 图片实时生成，首次约需 10-20 秒）');
+    }
+
+    // ---- 初始化 ----
+    function loadData() {
+      try {
+        wardrobe = JSON.parse(localStorage.getItem(STORAGE_KEYS.wardrobe)) || [];
+        savedOutfits = JSON.parse(localStorage.getItem(STORAGE_KEYS.outfits)) || [];
+        Object.assign(settings, JSON.parse(localStorage.getItem(STORAGE_KEYS.settings)) || {});
+      } catch (e) { console.error(e); }
+    }
+    function saveWardrobe() { localStorage.setItem(STORAGE_KEYS.wardrobe, JSON.stringify(wardrobe)); }
+    function saveOutfits() { localStorage.setItem(STORAGE_KEYS.outfits, JSON.stringify(savedOutfits)); }
+    function saveSettings() { localStorage.setItem(STORAGE_KEYS.settings, JSON.stringify(settings)); }
+
+    function init() {
+      loadData();
+      bindEvents();
+      // 首次运行自动加载示例商品
+      const seeded = localStorage.getItem('ai_seeded_v1');
+      if (!wardrobe.length && !seeded) {
+        loadSampleItems(true);
+        localStorage.setItem('ai_seeded_v1', '1');
+      }
+      renderWardrobe();
+      renderSlots();
+      renderSavedOutfits();
+      updateSettingsForm();
+    }
+
+    // ---- 渲染衣橱 ----
+    function itemImageHtml(item, cls = '') {
+      const src = item.image || '';
+      const icon = CATEGORIES[item.category]?.icon || '👕';
+      const placeholder = `<div class="img-placeholder absolute inset-0 flex flex-col items-center justify-center bg-gray-100 text-gray-400 text-xs z-20" style="display:none"><span class="text-2xl">${icon}</span><span>图片加载失败</span></div>`;
+      const loader = `<div class="loader absolute z-20"></div>`;
+      return `<div class="relative bg-gray-100 flex items-center justify-center ${cls}" style="min-height:120px">
+        ${loader}
+        ${placeholder}
+        <img src="${src}" alt="${escapeHtml(item.name)}" loading="lazy" class="relative z-10" style="width:100%; height:120px; object-fit:cover;" onload="this.previousElementSibling.previousElementSibling && (this.previousElementSibling.previousElementSibling.style.display='none')" onerror="handleItemImageError(this)">
+      </div>`;
+    }
+
+    function handleItemImageError(img) {
+      const container = img.parentElement;
+      const loader = container.querySelector('.loader');
+      const placeholder = container.querySelector('.img-placeholder');
+      if (loader) loader.style.display = 'none';
+      img.style.display = 'none';
+      if (placeholder) placeholder.style.display = 'flex';
+    }
+
+    function renderWardrobe() {
+      const term = document.getElementById('searchInput').value.trim().toLowerCase();
+      const cat = document.querySelector('#categoryFilter .bg-teal-700')?.dataset.cat || 'all';
+      const season = document.getElementById('seasonFilter').value;
+      const occasion = document.getElementById('occasionFilter').value;
+      const list = document.getElementById('wardrobeList');
+      const filtered = wardrobe.filter(item => {
+        const matchesTerm = !term || item.name.toLowerCase().includes(term) || (item.color && item.color.toLowerCase().includes(term)) || (item.note && item.note.toLowerCase().includes(term));
+        const matchesCat = cat === 'all' || item.category === cat;
+        const matchesSeason = season === 'all' || item.season === season || item.season === 'all';
+        const matchesOccasion = occasion === 'all' || item.occasion === occasion;
+        return matchesTerm && matchesCat && matchesSeason && matchesOccasion;
+      });
+      document.getElementById('wardrobeCount').textContent = `${wardrobe.length} 件单品`;
+      if (!filtered.length) {
+        list.innerHTML = '<div class="text-center text-sm text-gray-400 mt-10">没有符合条件的单品</div>';
+        return;
+      }
+      list.innerHTML = filtered.map(item => `
+        <div class="item-card bg-white border rounded-lg overflow-hidden group" draggable="true" data-id="${item.id}">
+          ${itemImageHtml(item)}
+          <div class="p-2.5">
+            <div class="flex items-center justify-between mb-1">
+              <h4 class="font-semibold text-sm truncate">${escapeHtml(item.name)}</h4>
+            </div>
+            <div class="flex flex-wrap gap-1 mb-2">
+              ${item.color ? `<span class="tag">${escapeHtml(item.color)}</span>` : ''}
+              <span class="tag">${CATEGORIES[item.category].label}</span>
+              ${item.season !== 'all' ? `<span class="tag">${SEASONS[item.season]}</span>` : ''}
+            </div>
+            <div class="flex gap-2">
+              <button class="btn-add-to-outfit flex-1 px-2 py-1 text-xs bg-gray-100 hover:bg-teal-100 text-gray-700 rounded transition" data-id="${item.id}">加入搭配</button>
+              <button class="btn-edit px-2 py-1 text-xs border hover:bg-gray-50 rounded transition" data-id="${item.id}">编辑</button>
+            </div>
+          </div>
+        </div>
+      `).join('');
+      list.querySelectorAll('.item-card').forEach(card => {
+        card.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', card.dataset.id); e.dataTransfer.effectAllowed = 'copy'; });
+      });
+      list.querySelectorAll('.btn-add-to-outfit').forEach(btn => btn.addEventListener('click', e => { e.stopPropagation(); addToOutfit(btn.dataset.id); }));
+      list.querySelectorAll('.btn-edit').forEach(btn => btn.addEventListener('click', e => { e.stopPropagation(); openItemModal(btn.dataset.id); }));
+    }
+
+    // ---- 搭配区 ----
+    function renderSlots() {
+      const board = document.getElementById('dropBoard');
+      const keys = ['top', 'outer', 'dress', 'bottom', 'shoes', 'accessories', 'bag'];
+      board.innerHTML = keys.map(key => {
+        const item = currentOutfit.find(i => i.category === key);
+        return `
+          <div class="slot bg-white border-2 border-dashed border-gray-200 rounded-lg p-3 flex flex-col" data-slot="${key}">
+            <div class="text-xs text-gray-400 mb-2 flex items-center gap-1">
+              <span>${CATEGORIES[key].icon}</span><span>${CATEGORIES[key].slot}</span>
+            </div>
+            ${item ? `
+              <div class="flex-1 relative bg-gray-50 rounded-md overflow-hidden group" style="min-height:120px">
+                <img src="${item.image}" class="relative z-10 w-full h-full object-contain p-2" alt="${escapeHtml(item.name)}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                <div class="img-placeholder flex flex-col items-center justify-center absolute inset-0 bg-gray-50 text-gray-400 text-xs hidden"><span class="text-xl">${CATEGORIES[key].icon}</span><span>图片加载失败</span></div>
+                <div class="absolute bottom-0 left-0 right-0 bg-white/90 px-2 py-1 text-xs truncate z-20">${escapeHtml(item.name)}</div>
+                <button class="btn-remove-slot absolute top-1 right-1 w-5 h-5 bg-white rounded-full shadow text-xs text-gray-500 hover:text-red-600 z-20" data-id="${item.id}">×</button>
+              </div>
+            ` : '<div class="flex-1 flex flex-col items-center justify-center text-gray-300 text-sm"><span>拖拽到此处</span></div>'}
+          </div>
+        `;
+      }).join('');
+      board.querySelectorAll('.slot').forEach(slot => {
+        slot.addEventListener('dragover', e => { e.preventDefault(); slot.classList.add('drag-over'); });
+        slot.addEventListener('dragleave', () => slot.classList.remove('drag-over'));
+        slot.addEventListener('drop', e => { e.preventDefault(); slot.classList.remove('drag-over'); handleDrop(slot.dataset.slot, e.dataTransfer.getData('text/plain')); });
+      });
+      board.querySelectorAll('.btn-remove-slot').forEach(btn => btn.addEventListener('click', () => removeFromOutfit(btn.dataset.id)));
+    }
+
+    function handleDrop(slotKey, itemId) {
+      const item = wardrobe.find(i => i.id === itemId);
+      if (!item) return;
+      if (item.category !== slotKey) {
+        showToast(`该单品属于「${CATEGORIES[item.category].slot}」，请放到对应区域`);
+        return;
+      }
+      addToOutfit(itemId);
+    }
+
+    function addToOutfit(itemId) {
+      const item = wardrobe.find(i => i.id === itemId);
+      if (!item) return;
+      currentOutfit = currentOutfit.filter(i => i.category !== item.category);
+      currentOutfit.push(item);
+      renderSlots();
+      updatePrompt();
+    }
+
+    function removeFromOutfit(itemId) {
+      currentOutfit = currentOutfit.filter(i => i.id !== itemId);
+      renderSlots();
+      updatePrompt();
+    }
+
+    function clearOutfit() { currentOutfit = []; renderSlots(); updatePrompt(); }
+
+    function buildPrompt() {
+      if (!currentOutfit.length) return '';
+      const pieces = currentOutfit.map(i => {
+        const base = (i.description || '').trim() || `${i.color || ''} ${CATEGORIES[i.category]?.en || i.category}`.trim();
+        const colorPrefix = i.color && !(i.description || '').toLowerCase().includes(i.color.toLowerCase()) ? `${i.color} ` : '';
+        return `${colorPrefix}${base}`;
+      });
+      const occasion = currentOutfit[0]?.occasion || 'casual';
+      const occasionMap = { casual: 'casual and relaxed', commute: 'smart casual commute', sport: 'sporty', formal: 'formal and elegant', party: 'party and chic' };
+      const style = occasionMap[occasion] || occasionMap.casual;
+      return `Full-body fashion photograph of a young female model standing straight facing the camera, wearing an outfit composed of: ${pieces.join('; ')}. The look is ${style}. Clean neutral studio background, soft natural lighting, high-quality editorial photography, modern and cohesive, full body visible, model centered, all garments clearly shown.`;
+    }
+    function updatePrompt() {
+      const prompt = buildPrompt();
+      const panel = document.getElementById('promptPanel');
+      const text = document.getElementById('promptText');
+      if (prompt) {
+        panel.classList.remove('hidden');
+        // 如果用户没有手动编辑过当前提示词，则自动更新
+        if (!text.dataset.userEdited) text.value = prompt;
+      } else {
+        panel.classList.add('hidden');
+        text.dataset.userEdited = '';
+      }
+    }
+
+    function pollImg(prompt, seed, w = 400, h = 500) {
+      return `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=${w}&height=${h}&nologo=true&seed=${seed}`;
+    }
+
+    function preloadImage(url, timeoutMs = 120000) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        let done = false;
+        const timer = setTimeout(() => {
+          if (done) return;
+          done = true;
+          img.src = '';
+          reject(new Error('图片加载超时'));
+        }, timeoutMs);
+        img.onload = () => { if (done) return; done = true; clearTimeout(timer); resolve(); };
+        img.onerror = () => { if (done) return; done = true; clearTimeout(timer); reject(new Error('图片加载失败')); };
+        img.src = url;
+      });
+    }
+
+    // ---- 生成 ----
+    async function generateOutfit() {
+      if (!currentOutfit.length) { showToast('请至少选择一件单品'); return; }
+      // 允许用户在提示词框中手动编辑；若未编辑则使用自动生成的
+      const promptText = document.getElementById('promptText').value.trim();
+      const prompt = promptText || buildPrompt();
+      setGenerating(true);
+      try {
+        let imageUrl = '';
+        if (settings.provider === 'pollinations') {
+          // 免费公共接口：直接构造图片 URL，加随机种子保证每次不同
+          const seed = Math.floor(Math.random() * 100000);
+          const url = pollImg(prompt, seed, 768, 1024);
+          // 先立即把 URL 展示出来，让用户看到加载过程，避免按钮长时间卡住
+          showResult(url);
+          // 后台预加载并校验，最多等 120 秒；失败只提示，不影响已展示的图片
+          preloadImage(url, 120000).catch(err => {
+            showToast('图片仍在生成中，如长时间未显示请刷新：' + err.message);
+          });
+          imageUrl = url;
+        } else if (settings.provider === 'openai') {
+          if (!settings.apiKey) throw new Error('请先配置 OpenAI API Key');
+          const res = await fetch(settings.backendUrl || '/api/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ provider: 'openai', apiKey: settings.apiKey, apiBase: settings.apiBase, model: settings.model, prompt, items: currentOutfit })
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error?.message || JSON.stringify(data.error) || '生成失败');
+          imageUrl = data.data?.[0]?.url || data.url;
+        } else if (settings.provider === 'backend') {
+          if (!settings.backendUrl) throw new Error('请先配置后端接口地址');
+          const headers = { 'Content-Type': 'application/json' };
+          if (settings.backendApiKey) headers['Authorization'] = 'Bearer ' + settings.backendApiKey;
+          const res = await fetch(settings.backendUrl, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ prompt, apiKey: settings.backendApiKey, items: currentOutfit })
+          });
+          const data = await res.json().catch(() => ({}));
+          imageUrl = data.url || data.imageUrl || data.data?.[0]?.url;
+          if (!imageUrl) throw new Error('后端未返回图片地址');
+        } else if (settings.provider === 'deepseek') {
+          // DeepSeek 只做文本润色，不出图
+          if (!settings.deepseekKey) throw new Error('请先配置 DeepSeek API Key');
+          showToast('正在用 DeepSeek 润色提示词...');
+          const er = await fetch('/api/enhance', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              provider: 'deepseek',
+              apiKey: settings.deepseekKey,
+              baseUrl: settings.deepseekBase,
+              model: settings.deepseekModel,
+              items: currentOutfit,
+              basePrompt: prompt
+            })
+          });
+          const edata = await er.json().catch(() => ({}));
+          if (!er.ok) throw new Error(edata.error?.message || edata.error || 'DeepSeek 调用失败');
+          const refinedPrompt = (edata.prompt || '').trim() || prompt;
+          // 把润色后的提示词展示到编辑框，方便查看/微调
+          const pt = document.getElementById('promptText');
+          pt.value = refinedPrompt; pt.dataset.userEdited = '';
+          // 交给免费 Pollinations 出图
+          const seed = Math.floor(Math.random() * 100000);
+          const durl = pollImg(refinedPrompt, seed, 768, 1024);
+          showResult(durl);
+          preloadImage(durl, 120000).catch(err => showToast('图片仍在生成中，如长时间未显示请刷新：' + err.message));
+          imageUrl = durl;
+        } else {
+          imageUrl = await mockGenerate(currentOutfit);
+        }
+        if (settings.provider === 'openai' || settings.provider === 'backend') showResult(imageUrl);
+      } catch (err) {
+        showToast('生成失败：' + err.message);
+      } finally {
+        setGenerating(false);
+      }
+    }
+
+    function setGenerating(loading) {
+      const btn = document.getElementById('btnGenerate');
+      if (loading) { btn.disabled = true; btn.innerHTML = '<div class="loader mr-2"></div>生成中...'; }
+      else { btn.disabled = false; btn.textContent = 'AI 生成搭配图'; }
+    }
+
+    function showResult(url) {
+      document.getElementById('resultEmpty').classList.add('hidden');
+      document.getElementById('resultContent').classList.remove('hidden');
+      const imgEl = document.getElementById('resultImage');
+      const loader = document.getElementById('resultLoader');
+      const errorEl = document.getElementById('resultError');
+      imgEl.classList.add('hidden');
+      if (errorEl) errorEl.classList.add('hidden');
+      if (loader) loader.classList.remove('hidden');
+      imgEl.onload = () => {
+        imgEl.classList.remove('hidden');
+        if (loader) loader.classList.add('hidden');
+      };
+      imgEl.onerror = () => {
+        if (loader) loader.classList.add('hidden');
+        imgEl.classList.add('hidden');
+        if (errorEl) { errorEl.classList.remove('hidden'); errorEl.textContent = '图片加载失败，可能是网络或生成服务暂时不可用。'; }
+      };
+      imgEl.src = url;
+      document.getElementById('resultGeneratedAt').textContent = '生成时间：' + new Date().toLocaleString();
+      currentGeneratedImage = url;
+    }
+
+    // 本地模拟：把单品图合成在一张画布上
+    function mockGenerate(items) {
+      return new Promise((resolve) => {
+        const W = 512, H = 768;
+        const canvas = document.createElement('canvas');
+        canvas.width = W; canvas.height = H;
+        const ctx = canvas.getContext('2d');
+        const grad = ctx.createLinearGradient(0, 0, W, H);
+        grad.addColorStop(0, '#f0fdfa'); grad.addColorStop(1, '#f8fafc');
+        ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
+
+        ctx.fillStyle = '#115e59';
+        ctx.font = 'bold 24px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText('AI 穿搭预演', W/2, 50);
+        ctx.fillStyle = '#64748b';
+        ctx.font = '14px system-ui';
+        ctx.fillText('Generated by AI Outfit Preview', W/2, 75);
+
+        const cols = 2;
+        const pad = 24;
+        const imgW = (W - pad * (cols + 1)) / cols;
+        const imgH = 220;
+        let y = 120;
+        const loadAndDraw = (src, i) => new Promise(r => {
+          const img = new Image();
+          if (src && src.startsWith('http')) img.crossOrigin = 'anonymous';
+          img.onload = () => {
+            const col = i % cols, row = Math.floor(i / cols);
+            const ix = pad + col * (imgW + pad);
+            const iy = y + row * (imgH + 40);
+            ctx.fillStyle = '#ffffff';
+            ctx.shadowColor = 'rgba(0,0,0,0.08)';
+            ctx.shadowBlur = 10;
+            ctx.fillRect(ix - 8, iy - 8, imgW + 16, imgH + 40);
+            ctx.shadowBlur = 0;
+            const scale = Math.min((imgW - 16)/img.width, (imgH - 16)/img.height);
+            const dw = img.width * scale, dh = img.height * scale;
+            ctx.drawImage(img, ix + (imgW - dw)/2, iy + (imgH - dh)/2, dw, dh);
+            const item = items[i];
+            ctx.fillStyle = '#334155';
+            ctx.font = 'bold 13px system-ui';
+            ctx.textAlign = 'left';
+            ctx.fillText((item.color ? item.color + ' · ' : '') + CATEGORIES[item.category].slot, ix, iy + imgH + 18);
+            r();
+          };
+          img.onerror = () => r();
+          img.src = src;
+        });
+        Promise.all(items.map((item, i) => loadAndDraw(item.image, i))).then(() => resolve(canvas.toDataURL('image/png')));
+      });
+    }
+
+    // ---- 保存套装 ----
+    function saveCurrentOutfit(generatedImage) {
+      if (!currentOutfit.length) { showToast('搭配区为空'); return; }
+      const name = '套装 ' + (savedOutfits.length + 1);
+      const outfit = {
+        id: Date.now().toString(),
+        name,
+        itemIds: currentOutfit.map(i => i.id),
+        generatedImage: generatedImage || document.getElementById('resultImage')?.src || null,
+        prompt: buildPrompt(),
+        createdAt: new Date().toLocaleString()
+      };
+      savedOutfits.unshift(outfit);
+      saveOutfits();
+      renderSavedOutfits();
+      showToast('套装已保存');
+    }
+
+    function renderSavedOutfits() {
+      const container = document.getElementById('savedOutfits');
+      if (!savedOutfits.length) { container.innerHTML = '<div class="text-sm text-gray-400">暂无套装</div>'; return; }
+      container.innerHTML = savedOutfits.map(o => {
+        const items = o.itemIds.map(id => wardrobe.find(i => i.id === id)).filter(Boolean);
+        return `
+          <div class="border rounded-lg p-3 bg-gray-50 hover:bg-white transition">
+            <div class="flex items-start justify-between mb-2">
+              <h4 class="font-semibold text-sm">${escapeHtml(o.name)}</h4>
+              <button class="btn-delete-outfit text-xs text-gray-400 hover:text-red-600" data-id="${o.id}">删除</button>
+            </div>
+            ${o.generatedImage && !o.generatedImage.startsWith('data:image') ? `<img src="${o.generatedImage}" class="w-full h-40 object-cover rounded-md mb-2 bg-white">` : ''}
+            <div class="flex flex-wrap gap-1">
+              ${items.map(i => `<span class="tag">${CATEGORIES[i.category].label}</span>`).join('')}
+            </div>
+            <div class="text-xs text-gray-400 mt-2">${o.createdAt}</div>
+          </div>
+        `;
+      }).join('');
+      container.querySelectorAll('.btn-delete-outfit').forEach(btn => btn.addEventListener('click', () => {
+        savedOutfits = savedOutfits.filter(o => o.id !== btn.dataset.id);
+        saveOutfits(); renderSavedOutfits();
+      }));
+    }
+
+    // ---- 单品弹窗 ----
+    let editingItemId = null;
+    function openItemModal(id) {
+      editingItemId = id || null;
+      document.getElementById('itemModalTitle').textContent = id ? '编辑单品' : '添加衣服';
+      document.getElementById('itemId').value = id || '';
+      document.getElementById('itemImageFile').value = '';
+      document.getElementById('itemImageUrl').value = '';
+      document.getElementById('itemPreview').classList.add('hidden');
+      const item = id ? wardrobe.find(i => i.id === id) : null;
+      if (item) {
+        document.getElementById('itemName').value = item.name;
+        document.getElementById('itemCategory').value = item.category;
+        document.getElementById('itemColor').value = item.color || '';
+        document.getElementById('itemSeason').value = item.season || 'all';
+        document.getElementById('itemOccasion').value = item.occasion || 'casual';
+        document.getElementById('itemNote').value = item.note || '';
+        document.getElementById('itemDescription').value = item.description || '';
+        if (item.image) { document.getElementById('itemPreview').classList.remove('hidden'); document.querySelector('#itemPreview img').src = item.image; }
+      } else {
+        document.getElementById('itemForm').reset();
+        document.getElementById('itemSeason').value = 'all';
+        document.getElementById('itemOccasion').value = 'casual';
+      }
+      document.getElementById('itemModal').classList.remove('hidden');
+      document.getElementById('itemModal').classList.add('flex');
+    }
+    function closeItemModal() { document.getElementById('itemModal').classList.add('hidden'); document.getElementById('itemModal').classList.remove('flex'); }
+
+    async function saveItem(e) {
+      e.preventDefault();
+      const name = document.getElementById('itemName').value.trim();
+      const category = document.getElementById('itemCategory').value;
+      const color = document.getElementById('itemColor').value.trim();
+      const season = document.getElementById('itemSeason').value;
+      const occasion = document.getElementById('itemOccasion').value;
+      const note = document.getElementById('itemNote').value.trim();
+      const description = document.getElementById('itemDescription').value.trim();
+      const file = document.getElementById('itemImageFile').files[0];
+      const url = document.getElementById('itemImageUrl').value.trim();
+      let image = '';
+      if (file) image = await readFileAsBase64(file);
+      else if (url) image = url;
+      else if (editingItemId) image = wardrobe.find(i => i.id === editingItemId)?.image || '';
+      if (!image) { showToast('请上传图片或填写图片 URL'); return; }
+      const item = { id: editingItemId || Date.now().toString(), name, category, color, season, occasion, note, description, image };
+      if (editingItemId) {
+        const idx = wardrobe.findIndex(i => i.id === editingItemId);
+        if (idx >= 0) wardrobe[idx] = item;
+      } else {
+        wardrobe.unshift(item);
+      }
+      saveWardrobe(); renderWardrobe(); closeItemModal();
+      const inOutfit = currentOutfit.findIndex(i => i.id === item.id);
+      if (inOutfit >= 0) { currentOutfit[inOutfit] = item; renderSlots(); updatePrompt(); }
+    }
+
+    function readFileAsBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    // ---- 设置弹窗 ----
+    function updateSettingsForm() {
+      document.getElementById('settingProvider').value = settings.provider;
+      document.getElementById('settingApiKey').value = settings.apiKey || '';
+      document.getElementById('settingModel').value = settings.model || 'dall-e-3';
+      document.getElementById('settingBackendUrl').value = settings.backendUrl || 'http://localhost:3000/api/generate';
+      document.getElementById('settingApiKeyBackend').value = settings.backendApiKey || '';
+      document.getElementById('settingApiBase').value = settings.apiBase || '';
+      document.getElementById('settingDeepseekKey').value = settings.deepseekKey || '';
+      document.getElementById('settingDeepseekModel').value = settings.deepseekModel || 'deepseek-chat';
+      document.getElementById('settingDeepseekBase').value = settings.deepseekBase || '';
+      toggleSettingsFields();
+    }
+    function toggleSettingsFields() {
+      const p = document.getElementById('settingProvider').value;
+      document.getElementById('openaiFields').classList.toggle('hidden', p !== 'openai');
+      document.getElementById('backendFields').classList.toggle('hidden', p !== 'backend');
+      document.getElementById('deepseekFields').classList.toggle('hidden', p !== 'deepseek');
+    }
+    function openSettingsModal() { document.getElementById('settingsModal').classList.remove('hidden'); document.getElementById('settingsModal').classList.add('flex'); }
+    function closeSettingsModal() { document.getElementById('settingsModal').classList.add('hidden'); document.getElementById('settingsModal').classList.remove('flex'); }
+    function saveSettingsForm(e) {
+      e.preventDefault();
+      settings.provider = document.getElementById('settingProvider').value;
+      settings.apiKey = document.getElementById('settingApiKey').value.trim();
+      settings.model = document.getElementById('settingModel').value;
+      settings.backendUrl = document.getElementById('settingBackendUrl').value.trim() || 'http://localhost:3000/api/generate';
+      settings.backendApiKey = document.getElementById('settingApiKeyBackend').value.trim();
+      settings.apiBase = document.getElementById('settingApiBase').value.trim();
+      settings.deepseekKey = document.getElementById('settingDeepseekKey').value.trim();
+      settings.deepseekModel = document.getElementById('settingDeepseekModel').value;
+      settings.deepseekBase = document.getElementById('settingDeepseekBase').value.trim();
+      saveSettings(); closeSettingsModal(); showToast('设置已保存');
+    }
+
+    // ---- 备份 ----
+    function exportBackup() {
+      const data = { wardrobe, savedOutfits, settings, exportAt: new Date().toISOString() };
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `ai-outfit-backup-${Date.now()}.json`; a.click();
+      URL.revokeObjectURL(url);
+    }
+    function importBackup(file) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const data = JSON.parse(reader.result);
+          if (data.wardrobe) wardrobe = data.wardrobe;
+          if (data.savedOutfits) savedOutfits = data.savedOutfits;
+          if (data.settings) Object.assign(settings, data.settings);
+          saveWardrobe(); saveOutfits(); saveSettings();
+          renderWardrobe(); renderSavedOutfits(); updateSettingsForm();
+          showToast('备份已导入');
+        } catch (e) { showToast('备份文件无效'); }
+      };
+      reader.readAsText(file);
+    }
+
+    // ---- 工具 ----
+    function escapeHtml(str) {
+      if (!str) return '';
+      return str.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+    }
+    function showToast(msg) {
+      const toast = document.createElement('div');
+      toast.className = 'fixed bottom-5 left-1/2 -translate-x-1/2 bg-gray-900 text-white px-4 py-2 rounded-md text-sm shadow-lg z-50';
+      toast.textContent = msg;
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 2500);
+    }
+
+    function bindEvents() {
+      document.getElementById('btnAdd').addEventListener('click', () => openItemModal());
+      document.getElementById('btnCancelItem').addEventListener('click', closeItemModal);
+      document.getElementById('itemForm').addEventListener('submit', saveItem);
+      document.getElementById('itemImageFile').addEventListener('change', e => {
+        if (e.target.files[0]) readFileAsBase64(e.target.files[0]).then(src => { document.getElementById('itemPreview').classList.remove('hidden'); document.querySelector('#itemPreview img').src = src; });
+      });
+      document.getElementById('itemImageUrl').addEventListener('input', e => { if (e.target.value.trim()) { document.getElementById('itemPreview').classList.remove('hidden'); document.querySelector('#itemPreview img').src = e.target.value.trim(); } });
+      document.getElementById('btnClear').addEventListener('click', clearOutfit);
+      document.getElementById('btnSaveOutfit').addEventListener('click', () => saveCurrentOutfit());
+      document.getElementById('btnGenerate').addEventListener('click', generateOutfit);
+      document.getElementById('btnSaveGenerated').addEventListener('click', () => saveCurrentOutfit());
+      document.getElementById('btnDownload').addEventListener('click', () => {
+        const src = document.getElementById('resultImage').src; if (!src) return;
+        const a = document.createElement('a'); a.href = src; a.download = 'ai-outfit-' + Date.now() + '.png'; a.click();
+      });
+      document.getElementById('btnSettings').addEventListener('click', openSettingsModal);
+      document.getElementById('btnCancelSettings').addEventListener('click', closeSettingsModal);
+      document.getElementById('settingsForm').addEventListener('submit', saveSettingsForm);
+      document.getElementById('settingProvider').addEventListener('change', toggleSettingsFields);
+      document.getElementById('searchInput').addEventListener('input', renderWardrobe);
+      document.getElementById('seasonFilter').addEventListener('change', renderWardrobe);
+      document.getElementById('occasionFilter').addEventListener('change', renderWardrobe);
+      document.getElementById('categoryFilter').addEventListener('click', e => {
+        if (e.target.dataset.cat) {
+          document.querySelectorAll('#categoryFilter button').forEach(b => { b.classList.remove('bg-teal-700', 'text-white'); b.classList.add('bg-gray-100', 'text-gray-600'); });
+          e.target.classList.remove('bg-gray-100', 'text-gray-600'); e.target.classList.add('bg-teal-700', 'text-white');
+          renderWardrobe();
+        }
+      });
+      document.getElementById('promptText').addEventListener('input', e => { e.target.dataset.userEdited = '1'; });
+      document.getElementById('btnResetPrompt')?.addEventListener('click', () => {
+        const text = document.getElementById('promptText');
+        text.dataset.userEdited = '';
+        text.value = buildPrompt();
+      });
+      document.getElementById('btnSample').addEventListener('click', () => loadSampleItems(true));
+      document.getElementById('btnExport').addEventListener('click', exportBackup);
+      document.getElementById('btnImport').addEventListener('click', () => document.getElementById('importFile').click());
+      document.getElementById('importFile').addEventListener('change', e => { if (e.target.files[0]) importBackup(e.target.files[0]); });
+    }
+
+    init();
+  </script>
+</body>
+</html>
